@@ -10,12 +10,42 @@ begin
 	using ImageView
 	using Ditherings
 	using PlutoUI
+	using DSP #for conv
+	using LoopVectorization, OffsetArrays
 end
 	
 
 # ╔═╡ b43bbe96-81f1-11eb-1a1f-e798274b82ac
 md"Load up the dependencies"
 
+
+# ╔═╡ bdd9aba4-8771-11eb-29e7-b544121ce870
+kernel = [ 1.0 1.0 1.0
+              1.0 0.0 1.0
+              1.0 1.0 1.0 ]
+
+
+# ╔═╡ 93056986-877b-11eb-294a-0b3802b5ba62
+liveordie(count::Integer, current) = 
+(current == 0 && count==3) || (current == 1 && (1 < count <=3))
+
+
+# ╔═╡ 150916da-8772-11eb-30e5-6b2ab6de1f24
+function convGOL(A::AbstractMatrix, kern::AbstractMatrix)
+	outtype = eltype(A)
+	out = zeros(size(A))
+    @inbounds for J in CartesianIndices(out) #@avx
+        tmp = zero(eltype(out))
+        for I ∈ CartesianIndices(kern)
+            tmp += A[I + J] * kern[I]
+        end
+		#Any live cell with two or three live neighbours survives.
+        #Any dead cell with three live neighbours becomes a live cell.
+        #All other live cells die in the next generation. Similarly, all other dead cells stay dead.
+        out[J] =  outtype(liveordie(Integer(tmp), convert(UInt8,(A[J]))))
+    end
+    out
+end
 
 # ╔═╡ 39fb2038-81f4-11eb-3b7f-d11eec36b65d
 begin
@@ -88,9 +118,29 @@ end
 # ╔═╡ c27b583a-837d-11eb-0e68-e1d2bd95cc5e
 rmse(canvas_loaf, lisa_loaf)
 
+# ╔═╡ 81af2678-8773-11eb-2dbe-8f833fa742b9
+lisa_loaf[:,:,1][230,230] == 1
+
+
+
+# ╔═╡ ebe1b162-877c-11eb-05ec-f3e4400ac8c7
+convert(UInt8, lisa_loaf[:,:,1][230,230]) == 1
+
+# ╔═╡ 5c5c6f2c-8782-11eb-34f7-3beb3a7df00a
+typeof(UInt8.(lisa_loaf[:,:,1]))
+
+# ╔═╡ a4ed1a44-877e-11eb-2fe9-b33ca0b1f39e
+ns = convGOL(UInt8.(lisa_loaf[:,:,1]), kernel)
+
+# ╔═╡ 40cba2f0-8798-11eb-259f-cf57c4f84db5
+Gray.(ns)
+
 # ╔═╡ Cell order:
 # ╠═b43bbe96-81f1-11eb-1a1f-e798274b82ac
 # ╠═a3e50b96-81f2-11eb-294d-153882ea5f67
+# ╠═bdd9aba4-8771-11eb-29e7-b544121ce870
+# ╠═93056986-877b-11eb-294a-0b3802b5ba62
+# ╠═150916da-8772-11eb-30e5-6b2ab6de1f24
 # ╠═39fb2038-81f4-11eb-3b7f-d11eec36b65d
 # ╠═0ad05da4-81f5-11eb-34fb-0fd4b2290487
 # ╠═157b5560-81f5-11eb-33b2-c5f0358999c5
@@ -104,3 +154,8 @@ rmse(canvas_loaf, lisa_loaf)
 # ╠═22d9f404-836d-11eb-3d67-0b6f64d917d4
 # ╠═46136f9c-836d-11eb-3d3e-75b1b2fa1e17
 # ╠═c27b583a-837d-11eb-0e68-e1d2bd95cc5e
+# ╠═81af2678-8773-11eb-2dbe-8f833fa742b9
+# ╠═ebe1b162-877c-11eb-05ec-f3e4400ac8c7
+# ╠═5c5c6f2c-8782-11eb-34f7-3beb3a7df00a
+# ╠═a4ed1a44-877e-11eb-2fe9-b33ca0b1f39e
+# ╠═40cba2f0-8798-11eb-259f-cf57c4f84db5
