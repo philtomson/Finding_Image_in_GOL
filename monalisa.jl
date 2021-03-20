@@ -21,9 +21,9 @@ md"Load up the dependencies"
 
 
 # ╔═╡ bdd9aba4-8771-11eb-29e7-b544121ce870
-kernel = [ 1.0 1.0 1.0
-              1.0 0.0 1.0
-              1.0 1.0 1.0 ]
+kernel = UInt8.([ 1 1 1   #kernel for GoL
+                  1 0 1
+                  1 1 1 ])
 
 
 # ╔═╡ 93056986-877b-11eb-294a-0b3802b5ba62
@@ -35,15 +35,16 @@ liveordie(count::Integer, current) =
 function convGOL(A::AbstractMatrix, kern::AbstractMatrix)
 	outtype = eltype(A)
 	out = zeros(outtype, size(A))
+	iterize = size(A) .- size(kern)
     @inbounds for J in CartesianIndices(out) #@avx
-        tmp = zero(eltype(out))
+        count = zero(outtype)
         for I ∈ CartesianIndices(kern)
-            tmp += A[I + J] * kern[I]
+            count += A[I + J] * kern[I]
         end
 		#Any live cell with two or three live neighbours survives.
         #Any dead cell with three live neighbours becomes a live cell.
         #All other live cells die in the next generation. Similarly, all other dead cells stay dead.
-        out[J] =  outtype(liveordie(Integer(tmp), A[J]))
+        out[J] =  outtype(liveordie(count, A[J]))
     end
     out
 end
