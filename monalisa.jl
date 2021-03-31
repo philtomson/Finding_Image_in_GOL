@@ -13,6 +13,7 @@ begin
 	using DSP #for conv
 	using LoopVectorization, OffsetArrays
 	using CUDA
+	using Plots
 end
 	
 
@@ -23,11 +24,25 @@ md"Load up the dependencies"
 # ╔═╡ 5411b618-8dbf-11eb-1e0d-e311384e9d9d
 n_gens = 6
 
+# ╔═╡ 3e307332-917a-11eb-321f-b3a59fab394f
+MAX_MUTATIONS = 8
+
 # ╔═╡ bdd9aba4-8771-11eb-29e7-b544121ce870
 kernel = UInt8.([ 1 1 1   #kernel for GoL
                   1 0 1
                   1 1 1 ])
 
+
+# ╔═╡ 8f7564fc-90e4-11eb-0508-cf1f28667f24
+test_board = UInt8.([ 0 0 0 0 0 0 0 0
+		              0 0 0 0 0 0 0 0
+		              0 1 1 1 0 0 0 0
+		              0 1 0 0 0 0 0 0 
+		              0 0 1 0 0 0 0 0 
+		              0 0 0 0 0 0 0 0
+		              0 0 0 0 0 1 1 1
+		              0 0 0 0 0 0 0 0
+		             ])
 
 # ╔═╡ 93056986-877b-11eb-294a-0b3802b5ba62
 liveordie(count::Integer, current) = 
@@ -35,11 +50,11 @@ liveordie(count::Integer, current) =
 
 
 # ╔═╡ 150916da-8772-11eb-30e5-6b2ab6de1f24
-function convGOL(A::AbstractMatrix, kern::AbstractMatrix)
+function convGOLold(A::AbstractMatrix, kern::AbstractMatrix)
 	outtype = eltype(A)
 	out = zeros(outtype, size(A))
-	iterize = size(A) .- size(kern)
-    @inbounds for J in CartesianIndices(iterize) #@avx
+	iterize = size(A) #.- size(kern)
+    @inbounds for J in CartesianIndices(iterize.-(1,1)) #@avx
         count = zero(outtype)
         for I ∈ CartesianIndices(kern)
             count += A[I + J] * kern[I]
@@ -47,22 +62,54 @@ function convGOL(A::AbstractMatrix, kern::AbstractMatrix)
 		#Any live cell with two or three live neighbours survives.
         #Any dead cell with three live neighbours becomes a live cell.
         #All other live cells die in the next generation. Similarly, all other dead cells stay dead.
-        out[J] =  outtype(liveordie(count, A[J]))
+        out[J] =  count #outtype(liveordie(count, A[J]))
     end
     out
 end
+
+# ╔═╡ 88fbe00c-90ea-11eb-0e6c-eb8bd504babf
+function convGOL(A::AbstractMatrix, kern::AbstractMatrix)
+	
+	counts = conv(A, kern)[2:end-1, 2:end-1]
+	out    = zeros(eltype(A), size(A))
+	#size(counts) should == size(A)
+	@inbounds for i in CartesianIndices(size(A))
+		out[i] = liveordie(counts[i], A[i])
+	end
+	out
+end
+		
+	
+	
+	
+
+# ╔═╡ e0cd1dd8-91cd-11eb-2c6d-c7a93f002d8b
+function GOLsteps(state::AbstractMatrix, kern::AbstractMatrix, ngens::Integer)
+	for _ in 1:ngens
+		state = convGOL(state, kern)
+	end
+	state
+end
+
+# ╔═╡ 6b369612-90e5-11eb-1914-256098e50788
+test_board1 = convGOL(test_board, kernel)
+
+# ╔═╡ 7c222bb8-90f0-11eb-277f-0d8d88b385dd
+Gray.(test_board)
+
+# ╔═╡ 7f332422-90e6-11eb-39c2-8d2397d3e2a5
+Gray.(test_board1)
 
 # ╔═╡ 342aa2b0-8d1f-11eb-315d-411b639bd426
 #conv the whole "loaf"
 function convGOL_all!(A::Array{Array{UInt8,2},1}, kern::AbstractMatrix, ngens::Integer)
    #mapslices( img -> convGOL(img, kern), A, (2,3))
 	num_imgs = size(A)[1]
-	for i in ngens
+	
 	    for img_num in 1:num_imgs
-	        tmp = convGOL(A[img_num], kern)
+	        tmp = GOLsteps(A[img_num], kern, ngens)
 		    A[img_num] = tmp
 		end
-	end
 end
 
 # ╔═╡ f8a49e28-8830-11eb-1bc1-61485a281e82
@@ -205,6 +252,9 @@ begin
 	
 end
 
+# ╔═╡ b8b556dc-91d3-11eb-1885-e3e47450ab87
+Gray.(canvas_loaf[1])
+
 # ╔═╡ 33adbf88-8c2e-11eb-16fc-0baa78a3a1eb
 size(canvas_loaf)
 
@@ -236,7 +286,10 @@ sum.(canvas_loaf_before)
 Gray.(canvas_loaf_before[1])
 
 # ╔═╡ 0f31b2a0-8d1f-11eb-2113-510bc2e43e46
-convGOL_all!(canvas_loaf, kernel, 5)
+begin
+	canvas_loaf_copy = copy(canvas_loaf)
+   convGOL_all!(canvas_loaf_copy, kernel, 5)
+end
 
 # ╔═╡ 6f5ae3b4-8d23-11eb-1e2d-891a32cfe9e8
 sum.(canvas_loaf)
@@ -275,7 +328,7 @@ Gray.(ns1)
 Gray.(canvas_loaf[1])
 
 # ╔═╡ fec3b1fc-885f-11eb-347d-99257f131975
-ns2 = convGOL(canvas_loaf[1], kernel)
+ns2 = convGOL(canvas_loaf[50], kernel)
 
 # ╔═╡ 2f717956-8860-11eb-2120-d1f872b570ec
 typeof(ns2)
@@ -296,16 +349,19 @@ typeof(canvas_loaf[1])
 # ╔═╡ 763f5126-8b73-11eb-0ba4-651a2b1cc8c6
 #Now we need the mutator tensor (terminology from the article)
 #Same shape as canvas_loaf, but all zeros execpt for one 1 in each "slice"
-function mutate(imgs, kw=0)
+function mutate(imgs, kw=0, max_mutations = MAX_MUTATIONS)
 	num_imgs = size(imgs)[1]
 	img_size = size(imgs[1])
 	outarray = Array{typeof(imgs[1])}(undef, num_imgs)
 
 	for r in 1:num_imgs
-	   mutator = zeros(UInt8, img_size)
-	   x,y = rand(1:img_size[1]-kw), rand(1:img_size[2]-kw)
-	   mutator[x,y] = 0x01
-	   outarray[r] = mutator
+		num_mutations = rand(1:max_mutations)
+	    mutator = zeros(UInt8, img_size)
+	    for i in 1:num_mutations #try 3 random pixels (TODO make this paramatizable)
+	       x,y = rand(1:img_size[1]-kw), rand(1:img_size[2]-kw)
+	       mutator[x,y] = 0x01
+		end
+	    outarray[r] = mutator
     end
 	outarray
 end
@@ -322,42 +378,71 @@ size(mutator) #[699, 480] = 0x01
 # ╔═╡ b0a747bc-8cf7-11eb-3637-51d2ae76e71f
 Gray.(mutator[46])
 
-# ╔═╡ 4d276e02-8d19-11eb-1258-37b8d3877256
-#apply the mutation via xor
-xord = xor.(canvas_loaf,mutator)
-
 # ╔═╡ 03144d4c-8dc5-11eb-07ea-91afc1e4d3ad
 typeof(canvas_loaf)
 
 # ╔═╡ bedeb286-8dbd-11eb-024c-bd1c613d0792
 function hill_climb(original, canvas, iterations, kernel=kernel, num_gens=n_gens)
 	best_score  = Inf
-	best_canvas = canvas
+	best_canvas = copy(canvas)
 	s_canvas    = copy(canvas)
+	fitness_progress = []
 	for run in 1:iterations
 		#s_canvas = xor.(s_canvas, mutate(canvas, size(kernel)[1]))
 		s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kernel)[1]))]
 		convGOL_all!(s_canvas, kernel, num_gens)
 		rmse_vals = rmse.(original, s_canvas)
 		curr_min  = minimum(rmse_vals)
+		push!(fitness_progress, curr_min) 
 		if curr_min < best_score
 			best_score = curr_min
 			best_canvas = tileimg(s_canvas[argmin(rmse_vals)], size(s_canvas)[1])
 		end
 		s_canvas = best_canvas
 	end
-	return s_canvas
+	return s_canvas, fitness_progress
 end
 
 # ╔═╡ 867e347e-8dbe-11eb-10b9-7db60f1053d8
-result = hill_climb(lisa_loaf, canvas_loaf, 5000)
+result, fitnesses = hill_climb(lisa_loaf, canvas_loaf, 250)
+
+# ╔═╡ b5a98880-9196-11eb-179d-71191f142ccf
+plot(fitnesses)
+
+# ╔═╡ 19bda112-91d3-11eb-0b19-65c359b05954
+fitnesses
+
 
 # ╔═╡ 68739244-8dc8-11eb-3fc0-9fd199e0ec4a
 Gray.(result[1])
 
+# ╔═╡ 56286b72-9177-11eb-38db-afed9d718b63
+result2, fitnesses2 = hill_climb(lisa_loaf, result, 500)
+
+# ╔═╡ cdeb1670-9196-11eb-2419-798a88c6c87d
+plot(fitnesses2)
+
+# ╔═╡ 04f3a868-9178-11eb-0466-8d60e69eabab
+Gray.(result2[1])
+
+# ╔═╡ 0b5f2110-91b3-11eb-17be-3b18496ad658
+Gray.(GOLsteps(result2[1], kernel, 1000))
+
+# ╔═╡ 164cd10a-9178-11eb-28b9-ddfb5aec1f2d
+Gray.(xor.(result2[1], result[1]))
+
+# ╔═╡ 552ed396-9178-11eb-2064-dd0a1cddb31c
+rmse(result[1], result2[1])
+
+# ╔═╡ 163b801e-9178-11eb-0d24-31b50077a4d6
+
+
+# ╔═╡ abca9ec8-9108-11eb-1f9d-89c1a17b7576
+Gray.(canvas_loaf[1])
+
 # ╔═╡ fedd0dac-8dc6-11eb-3594-cd1ab3de9805
 #find the best one:
-rmse_vals1 = rmse.(result, lisa_loaf)
+rmse_vals1 = rmse.(result2, lisa_loaf)
 
 # ╔═╡ 8995305e-8dc8-11eb-362e-81fcdf7ed4cf
 minimum(rmse_vals1)
@@ -374,48 +459,20 @@ Gray.(result[argmin(rmse_vals1)])
 # ╔═╡ 5ba08d2c-8da4-11eb-18f0-11d1a6d22219
 modulod = (canvas_loaf[46] .+ mutator[46]) .%0x02
 
-# ╔═╡ 90354f3a-8da4-11eb-256e-6f87c0e71db9
-modulod == xord
-
-# ╔═╡ 2d338256-8d1a-11eb-2efc-6741eebf41e2
-begin
-   tensor1 = rand(UInt8, (50,720,483))
-   tensor2 = rand(UInt8, (50,720,483))
-end
-
-# ╔═╡ 48255062-8d1a-11eb-2bd3-991a511f37fd
-tensor1[1,:,:]
-
-# ╔═╡ 2249fd80-8d1e-11eb-02ea-9be207408f58
-size(tensor1[:])
-
-# ╔═╡ 91ba5812-8d1a-11eb-11d9-a31636daa7a3
-rmse(tensor1, tensor2)
-
-# ╔═╡ f0441ec2-8d1c-11eb-2fe0-05ac477f698e
-axes(tensor1)[1]
-
-# ╔═╡ 341793c0-8d1d-11eb-3bfb-4b40374f6552
-axes(tensor1,1)
-
-# ╔═╡ 370a5c86-8b7f-11eb-2769-47e295612fb1
-images = size(UInt8.(repeat(lisa_img, 1,1,50)))
-
-
-
-# ╔═╡ 10d0527c-8c0c-11eb-2580-6fc00acb6a58
-tiled_images = tileimg(UInt8.(lisa_img), 50)
-
-# ╔═╡ ec8f4f80-8c1c-11eb-21b0-2324b669c1fc
-typeof(tiled_images[1])
-
 # ╔═╡ Cell order:
 # ╠═b43bbe96-81f1-11eb-1a1f-e798274b82ac
 # ╠═a3e50b96-81f2-11eb-294d-153882ea5f67
 # ╠═5411b618-8dbf-11eb-1e0d-e311384e9d9d
+# ╠═3e307332-917a-11eb-321f-b3a59fab394f
 # ╠═bdd9aba4-8771-11eb-29e7-b544121ce870
+# ╠═8f7564fc-90e4-11eb-0508-cf1f28667f24
 # ╠═93056986-877b-11eb-294a-0b3802b5ba62
 # ╠═150916da-8772-11eb-30e5-6b2ab6de1f24
+# ╠═88fbe00c-90ea-11eb-0e6c-eb8bd504babf
+# ╠═e0cd1dd8-91cd-11eb-2c6d-c7a93f002d8b
+# ╠═6b369612-90e5-11eb-1914-256098e50788
+# ╠═7c222bb8-90f0-11eb-277f-0d8d88b385dd
+# ╠═7f332422-90e6-11eb-39c2-8d2397d3e2a5
 # ╠═342aa2b0-8d1f-11eb-315d-411b639bd426
 # ╠═f8a49e28-8830-11eb-1bc1-61485a281e82
 # ╠═3a9216ee-8c23-11eb-02c5-1ba46ec12124
@@ -436,6 +493,7 @@ typeof(tiled_images[1])
 # ╠═22d9f404-836d-11eb-3d67-0b6f64d917d4
 # ╠═b98ee864-8c23-11eb-3aac-bd475a3afb31
 # ╠═46136f9c-836d-11eb-3d3e-75b1b2fa1e17
+# ╠═b8b556dc-91d3-11eb-1885-e3e47450ab87
 # ╠═33adbf88-8c2e-11eb-16fc-0baa78a3a1eb
 # ╠═eb030774-8861-11eb-1710-c573b19b5b52
 # ╠═07289ae2-8862-11eb-3c83-f97cb1a1261f
@@ -468,24 +526,23 @@ typeof(tiled_images[1])
 # ╠═69bc714e-8b74-11eb-2956-f106bef8bb3a
 # ╠═2520cf00-8b7e-11eb-2e97-3d1a4d78e432
 # ╠═b0a747bc-8cf7-11eb-3637-51d2ae76e71f
-# ╠═4d276e02-8d19-11eb-1258-37b8d3877256
 # ╠═03144d4c-8dc5-11eb-07ea-91afc1e4d3ad
 # ╠═bedeb286-8dbd-11eb-024c-bd1c613d0792
 # ╠═867e347e-8dbe-11eb-10b9-7db60f1053d8
+# ╠═b5a98880-9196-11eb-179d-71191f142ccf
+# ╠═19bda112-91d3-11eb-0b19-65c359b05954
 # ╠═68739244-8dc8-11eb-3fc0-9fd199e0ec4a
+# ╠═56286b72-9177-11eb-38db-afed9d718b63
+# ╠═cdeb1670-9196-11eb-2419-798a88c6c87d
+# ╠═04f3a868-9178-11eb-0466-8d60e69eabab
+# ╠═0b5f2110-91b3-11eb-17be-3b18496ad658
+# ╠═164cd10a-9178-11eb-28b9-ddfb5aec1f2d
+# ╠═552ed396-9178-11eb-2064-dd0a1cddb31c
+# ╠═163b801e-9178-11eb-0d24-31b50077a4d6
+# ╠═abca9ec8-9108-11eb-1f9d-89c1a17b7576
 # ╠═fedd0dac-8dc6-11eb-3594-cd1ab3de9805
 # ╠═8995305e-8dc8-11eb-362e-81fcdf7ed4cf
 # ╠═bfdb81c2-8dc8-11eb-353d-71df40b46b1b
 # ╠═a017b720-8dc8-11eb-3352-375f41ea9de9
 # ╠═a00c0614-8dc8-11eb-1c36-1d38506baff6
 # ╠═5ba08d2c-8da4-11eb-18f0-11d1a6d22219
-# ╠═90354f3a-8da4-11eb-256e-6f87c0e71db9
-# ╠═2d338256-8d1a-11eb-2efc-6741eebf41e2
-# ╠═48255062-8d1a-11eb-2bd3-991a511f37fd
-# ╠═2249fd80-8d1e-11eb-02ea-9be207408f58
-# ╠═91ba5812-8d1a-11eb-11d9-a31636daa7a3
-# ╠═f0441ec2-8d1c-11eb-2fe0-05ac477f698e
-# ╠═341793c0-8d1d-11eb-3bfb-4b40374f6552
-# ╠═370a5c86-8b7f-11eb-2769-47e295612fb1
-# ╠═10d0527c-8c0c-11eb-2580-6fc00acb6a58
-# ╠═ec8f4f80-8c1c-11eb-21b0-2324b669c1fc
