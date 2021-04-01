@@ -22,7 +22,7 @@ md"Load up the dependencies"
 
 
 # ╔═╡ 5411b618-8dbf-11eb-1e0d-e311384e9d9d
-n_gens = 6
+n_gens = 5
 
 # ╔═╡ 3e307332-917a-11eb-321f-b3a59fab394f
 MAX_MUTATIONS = 8
@@ -381,6 +381,15 @@ Gray.(mutator[46])
 # ╔═╡ 03144d4c-8dc5-11eb-07ea-91afc1e4d3ad
 typeof(canvas_loaf)
 
+# ╔═╡ c8bfc904-91da-11eb-0b2c-3d2e9aed6177
+#possibly an alternative to rmse for loss
+function img_diff(a::AbstractMatrix, b::AbstractMatrix)
+	sum(xor.(a,b))
+end
+
+# ╔═╡ c2df0a62-91db-11eb-034b-49a06bf516d5
+img_diff.(lisa_loaf, canvas_loaf)
+
 # ╔═╡ bedeb286-8dbd-11eb-024c-bd1c613d0792
 function hill_climb(original, canvas, iterations, kernel=kernel, num_gens=n_gens)
 	best_score  = Inf
@@ -390,13 +399,15 @@ function hill_climb(original, canvas, iterations, kernel=kernel, num_gens=n_gens
 	for run in 1:iterations
 		#s_canvas = xor.(s_canvas, mutate(canvas, size(kernel)[1]))
 		s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kernel)[1]))]
-		convGOL_all!(s_canvas, kernel, num_gens)
-		rmse_vals = rmse.(original, s_canvas)
+		saved_canvas = copy(s_canvas)
+		convGOL_all!(s_canvas, kernel, num_gens) #s_canvas will be modified
+		#rmse_vals = rmse.(original, s_canvas)
+		rmse_vals = img_diff.(original, s_canvas)
 		curr_min  = minimum(rmse_vals)
 		push!(fitness_progress, curr_min) 
 		if curr_min < best_score
 			best_score = curr_min
-			best_canvas = tileimg(s_canvas[argmin(rmse_vals)], size(s_canvas)[1])
+			best_canvas = tileimg(saved_canvas[argmin(rmse_vals)], size(saved_canvas)[1])
 		end
 		s_canvas = best_canvas
 	end
@@ -413,8 +424,18 @@ plot(fitnesses)
 fitnesses
 
 
+# ╔═╡ 69b24abc-91db-11eb-1b5a-f58e60e87a98
+img_diff(lisa_loaf[1], result[1])
+
 # ╔═╡ 68739244-8dc8-11eb-3fc0-9fd199e0ec4a
 Gray.(result[1])
+
+# ╔═╡ a68db7d4-9260-11eb-0737-3318e6ec1b6b
+begin
+	res_copy = copy(result)
+	convGOL_all!(res_copy, kernel, n_gens)
+	Gray.(res_copy[1])
+end
 
 # ╔═╡ 56286b72-9177-11eb-38db-afed9d718b63
 result2, fitnesses2 = hill_climb(lisa_loaf, result, 500)
@@ -422,23 +443,17 @@ result2, fitnesses2 = hill_climb(lisa_loaf, result, 500)
 # ╔═╡ cdeb1670-9196-11eb-2419-798a88c6c87d
 plot(fitnesses2)
 
+# ╔═╡ a413cc8c-91db-11eb-297b-0d718f2aa681
+img_diff(lisa_loaf[1], result2[1])
+
 # ╔═╡ 04f3a868-9178-11eb-0466-8d60e69eabab
 Gray.(result2[1])
 
 # ╔═╡ 0b5f2110-91b3-11eb-17be-3b18496ad658
-Gray.(GOLsteps(result2[1], kernel, 1000))
+Gray.(GOLsteps(result2[1], kernel, n_gens))
 
 # ╔═╡ 164cd10a-9178-11eb-28b9-ddfb5aec1f2d
 Gray.(xor.(result2[1], result[1]))
-
-# ╔═╡ 552ed396-9178-11eb-2064-dd0a1cddb31c
-rmse(result[1], result2[1])
-
-# ╔═╡ 163b801e-9178-11eb-0d24-31b50077a4d6
-
-
-# ╔═╡ abca9ec8-9108-11eb-1f9d-89c1a17b7576
-Gray.(canvas_loaf[1])
 
 # ╔═╡ fedd0dac-8dc6-11eb-3594-cd1ab3de9805
 #find the best one:
@@ -451,13 +466,28 @@ minimum(rmse_vals1)
 argmin(rmse_vals1)
 
 # ╔═╡ a017b720-8dc8-11eb-3352-375f41ea9de9
-Gray.(result[argmin(rmse_vals1)])
+Gray.(result2[argmin(rmse_vals1)])
 
 # ╔═╡ a00c0614-8dc8-11eb-1c36-1d38506baff6
+result3, fitnesses3 = hill_climb(lisa_loaf, result2, 500)
 
+# ╔═╡ b4521054-927e-11eb-27bf-7fbd150b1525
+plot(fitnesses3)
 
-# ╔═╡ 5ba08d2c-8da4-11eb-18f0-11d1a6d22219
-modulod = (canvas_loaf[46] .+ mutator[46]) .%0x02
+# ╔═╡ 88cf1666-927e-11eb-1f9f-d9771df8fd00
+Gray.(GOLsteps(result3[1], kernel, n_gens))
+
+# ╔═╡ b7bfe222-927f-11eb-3ee4-15420c409924
+result4, fitnesses4 = hill_climb(lisa_loaf, result3, 1500)
+
+# ╔═╡ d008d2c8-927f-11eb-33eb-d32bbbc8b86e
+plot(fitnesses4)
+
+# ╔═╡ cffb935e-927f-11eb-1462-27d98fcbd414
+Gray.(GOLsteps(result4[1], kernel, n_gens))
+
+# ╔═╡ df1eebee-927f-11eb-31d8-8bcc5fee6c98
+
 
 # ╔═╡ Cell order:
 # ╠═b43bbe96-81f1-11eb-1a1f-e798274b82ac
@@ -527,22 +557,29 @@ modulod = (canvas_loaf[46] .+ mutator[46]) .%0x02
 # ╠═2520cf00-8b7e-11eb-2e97-3d1a4d78e432
 # ╠═b0a747bc-8cf7-11eb-3637-51d2ae76e71f
 # ╠═03144d4c-8dc5-11eb-07ea-91afc1e4d3ad
+# ╠═c8bfc904-91da-11eb-0b2c-3d2e9aed6177
+# ╠═c2df0a62-91db-11eb-034b-49a06bf516d5
 # ╠═bedeb286-8dbd-11eb-024c-bd1c613d0792
 # ╠═867e347e-8dbe-11eb-10b9-7db60f1053d8
 # ╠═b5a98880-9196-11eb-179d-71191f142ccf
 # ╠═19bda112-91d3-11eb-0b19-65c359b05954
+# ╠═69b24abc-91db-11eb-1b5a-f58e60e87a98
 # ╠═68739244-8dc8-11eb-3fc0-9fd199e0ec4a
+# ╠═a68db7d4-9260-11eb-0737-3318e6ec1b6b
 # ╠═56286b72-9177-11eb-38db-afed9d718b63
 # ╠═cdeb1670-9196-11eb-2419-798a88c6c87d
+# ╠═a413cc8c-91db-11eb-297b-0d718f2aa681
 # ╠═04f3a868-9178-11eb-0466-8d60e69eabab
 # ╠═0b5f2110-91b3-11eb-17be-3b18496ad658
 # ╠═164cd10a-9178-11eb-28b9-ddfb5aec1f2d
-# ╠═552ed396-9178-11eb-2064-dd0a1cddb31c
-# ╠═163b801e-9178-11eb-0d24-31b50077a4d6
-# ╠═abca9ec8-9108-11eb-1f9d-89c1a17b7576
 # ╠═fedd0dac-8dc6-11eb-3594-cd1ab3de9805
 # ╠═8995305e-8dc8-11eb-362e-81fcdf7ed4cf
 # ╠═bfdb81c2-8dc8-11eb-353d-71df40b46b1b
 # ╠═a017b720-8dc8-11eb-3352-375f41ea9de9
 # ╠═a00c0614-8dc8-11eb-1c36-1d38506baff6
-# ╠═5ba08d2c-8da4-11eb-18f0-11d1a6d22219
+# ╠═b4521054-927e-11eb-27bf-7fbd150b1525
+# ╠═88cf1666-927e-11eb-1f9f-d9771df8fd00
+# ╠═b7bfe222-927f-11eb-3ee4-15420c409924
+# ╠═d008d2c8-927f-11eb-33eb-d32bbbc8b86e
+# ╠═cffb935e-927f-11eb-1462-27d98fcbd414
+# ╠═df1eebee-927f-11eb-31d8-8bcc5fee6c98
