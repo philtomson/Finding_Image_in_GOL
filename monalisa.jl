@@ -1,11 +1,12 @@
 ### A Pluto.jl notebook ###
-# v0.12.21
+# v0.14.0
 
 using Markdown
 using InteractiveUtils
 
 # ╔═╡ a3e50b96-81f2-11eb-294d-153882ea5f67
 begin
+	using LinearAlgebra
 	using Images
 	using ImageView
 	using Ditherings
@@ -53,22 +54,27 @@ liveordie(count::Integer, current) =
 function convGOLold(A::AbstractMatrix, kern::AbstractMatrix)
 	outtype = eltype(A)
 	out = zeros(outtype, size(A))
-	iterize = size(A) #.- size(kern)
-    @inbounds for J in CartesianIndices(iterize.-(1,1)) #@avx
+	itersize = size(A)
+	kernsize_x = size(kern)[1]
+	kernsize_y = size(kern)[2]
+	indices = CartesianIndices(itersize)[kernsize_x:end-kernsize_x, kernsize_y:end-kernsize_y]
+    @inbounds for J in indices #@avx
         count = zero(outtype)
-        for I ∈ CartesianIndices(kern)
-            count += A[I + J] * kern[I]
-        end
+        #for I ∈ CartesianIndices(kern)
+            #count += A[I + J] * kern[I]
+			count += A[J] .* kern
+
+        #end
 		#Any live cell with two or three live neighbours survives.
         #Any dead cell with three live neighbours becomes a live cell.
         #All other live cells die in the next generation. Similarly, all other dead cells stay dead.
-        out[J] =  count #outtype(liveordie(count, A[J]))
+        out[J] =  outtype(liveordie(count, A[J]))
     end
     out
 end
 
 # ╔═╡ 88fbe00c-90ea-11eb-0e6c-eb8bd504babf
-function convGOL(A::AbstractMatrix, kern::AbstractMatrix)
+function convGOL_conv(A::AbstractMatrix, kern::AbstractMatrix)
 	
 	counts = conv(A, kern)[2:end-1, 2:end-1]
 	out    = zeros(eltype(A), size(A))
@@ -83,6 +89,20 @@ end
 	
 	
 
+# ╔═╡ 0dd66708-931d-11eb-1068-374a4b5d6512
+function convGOL_dot(A::AbstractMatrix, kern::AbstractMatrix)
+	b = CartesianIndex(1,1)
+	out = zeros(eltype(A), size(A))
+	for i in CartesianIndices(A)[2:end-1, 2:end-1]
+		count = dot(A[i-b:i+b], kern)
+		out[i] = liveordie(count, A[i])
+	end
+	out
+end
+
+# ╔═╡ 2ae9379a-9338-11eb-338e-0d6534a6344e
+convGOL = convGOL_dot
+
 # ╔═╡ e0cd1dd8-91cd-11eb-2c6d-c7a93f002d8b
 function GOLsteps(state::AbstractMatrix, kern::AbstractMatrix, ngens::Integer)
 	for _ in 1:ngens
@@ -92,13 +112,19 @@ function GOLsteps(state::AbstractMatrix, kern::AbstractMatrix, ngens::Integer)
 end
 
 # ╔═╡ 6b369612-90e5-11eb-1914-256098e50788
-test_board1 = convGOL(test_board, kernel)
+test_board1 = convGOL(copy(test_board), kernel)
 
 # ╔═╡ 7c222bb8-90f0-11eb-277f-0d8d88b385dd
 Gray.(test_board)
 
 # ╔═╡ 7f332422-90e6-11eb-39c2-8d2397d3e2a5
 Gray.(test_board1)
+
+# ╔═╡ 5f8dc6ee-9319-11eb-1dba-ad3d883b7ed6
+test_dot = convGOL_dot(copy(test_board), kernel)
+
+# ╔═╡ 6ecf7bf0-9319-11eb-35ee-534981434671
+Gray.(test_dot)
 
 # ╔═╡ 342aa2b0-8d1f-11eb-315d-411b639bd426
 #conv the whole "loaf"
@@ -487,7 +513,13 @@ plot(fitnesses4)
 Gray.(GOLsteps(result4[1], kernel, n_gens))
 
 # ╔═╡ df1eebee-927f-11eb-31d8-8bcc5fee6c98
+result5, fitnesses5 = hill_climb(lisa_loaf, result4, 12000)
 
+# ╔═╡ 32950e0e-92a6-11eb-13cb-e764c79204b5
+plot(fitnesses5)
+
+# ╔═╡ 40539252-92a6-11eb-015b-61a88fb2c1ef
+Gray.(GOLsteps(result5[1], kernel, n_gens))
 
 # ╔═╡ Cell order:
 # ╠═b43bbe96-81f1-11eb-1a1f-e798274b82ac
@@ -499,10 +531,14 @@ Gray.(GOLsteps(result4[1], kernel, n_gens))
 # ╠═93056986-877b-11eb-294a-0b3802b5ba62
 # ╠═150916da-8772-11eb-30e5-6b2ab6de1f24
 # ╠═88fbe00c-90ea-11eb-0e6c-eb8bd504babf
+# ╠═0dd66708-931d-11eb-1068-374a4b5d6512
+# ╠═2ae9379a-9338-11eb-338e-0d6534a6344e
 # ╠═e0cd1dd8-91cd-11eb-2c6d-c7a93f002d8b
 # ╠═6b369612-90e5-11eb-1914-256098e50788
 # ╠═7c222bb8-90f0-11eb-277f-0d8d88b385dd
 # ╠═7f332422-90e6-11eb-39c2-8d2397d3e2a5
+# ╠═5f8dc6ee-9319-11eb-1dba-ad3d883b7ed6
+# ╠═6ecf7bf0-9319-11eb-35ee-534981434671
 # ╠═342aa2b0-8d1f-11eb-315d-411b639bd426
 # ╠═f8a49e28-8830-11eb-1bc1-61485a281e82
 # ╠═3a9216ee-8c23-11eb-02c5-1ba46ec12124
@@ -583,3 +619,5 @@ Gray.(GOLsteps(result4[1], kernel, n_gens))
 # ╠═d008d2c8-927f-11eb-33eb-d32bbbc8b86e
 # ╠═cffb935e-927f-11eb-1462-27d98fcbd414
 # ╠═df1eebee-927f-11eb-31d8-8bcc5fee6c98
+# ╠═32950e0e-92a6-11eb-13cb-e764c79204b5
+# ╠═40539252-92a6-11eb-015b-61a88fb2c1ef
