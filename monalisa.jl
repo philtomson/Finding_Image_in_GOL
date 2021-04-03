@@ -7,6 +7,7 @@ using InteractiveUtils
 # ╔═╡ a3e50b96-81f2-11eb-294d-153882ea5f67
 begin
 	using LinearAlgebra
+	using BenchmarkTools
 	using Images
 	using ImageView
 	using Ditherings
@@ -46,8 +47,8 @@ test_board = UInt8.([ 0 0 0 0 0 0 0 0
 		             ])
 
 # ╔═╡ 93056986-877b-11eb-294a-0b3802b5ba62
-liveordie(count::Integer, current) = 
-(current == 0 && count==3) || (current == 1 && (1 < count <=3))
+liveordie(count::UInt8, current::UInt8) = 
+(current == 0x00 && count==0x03) || (current == 0x01 && (0x01 < count <=0x03))
 
 
 # ╔═╡ 150916da-8772-11eb-30e5-6b2ab6de1f24
@@ -75,33 +76,29 @@ end
 
 # ╔═╡ 88fbe00c-90ea-11eb-0e6c-eb8bd504babf
 function convGOL_conv(A::AbstractMatrix, kern::AbstractMatrix)
-	
 	counts = conv(A, kern)[2:end-1, 2:end-1]
 	out    = zeros(eltype(A), size(A))
 	#size(counts) should == size(A)
 	@inbounds for i in CartesianIndices(size(A))
-		out[i] = liveordie(counts[i], A[i])
+		out[i] = liveordie(UInt8(counts[i]), A[i])
 	end
 	out
 end
-		
-	
-	
-	
+
 
 # ╔═╡ 0dd66708-931d-11eb-1068-374a4b5d6512
 function convGOL_dot(A::AbstractMatrix, kern::AbstractMatrix)
 	b = CartesianIndex(1,1)
 	out = zeros(eltype(A), size(A))
-	for i in CartesianIndices(A)[2:end-1, 2:end-1]
-		count = dot(A[i-b:i+b], kern)
+	@inbounds for i in CartesianIndices(A)[2:end-1, 2:end-1]
+		count = dot(view(A,i-b:i+b), kern)
 		out[i] = liveordie(count, A[i])
 	end
 	out
 end
 
 # ╔═╡ 2ae9379a-9338-11eb-338e-0d6534a6344e
-convGOL = convGOL_dot
+convGOL = convGOL_conv
 
 # ╔═╡ e0cd1dd8-91cd-11eb-2c6d-c7a93f002d8b
 function GOLsteps(state::AbstractMatrix, kern::AbstractMatrix, ngens::Integer)
@@ -130,12 +127,11 @@ Gray.(test_dot)
 #conv the whole "loaf"
 function convGOL_all!(A::Array{Array{UInt8,2},1}, kern::AbstractMatrix, ngens::Integer)
    #mapslices( img -> convGOL(img, kern), A, (2,3))
-	num_imgs = size(A)[1]
-	
-	    for img_num in 1:num_imgs
-	        tmp = GOLsteps(A[img_num], kern, ngens)
-		    A[img_num] = tmp
-		end
+	 num_imgs = size(A)[1]
+	 for img_num in 1:num_imgs
+	     tmp = GOLsteps(A[img_num], kern, ngens)
+	     A[img_num] = tmp
+	 end
 end
 
 # ╔═╡ f8a49e28-8830-11eb-1bc1-61485a281e82
@@ -417,16 +413,16 @@ end
 img_diff.(lisa_loaf, canvas_loaf)
 
 # ╔═╡ bedeb286-8dbd-11eb-024c-bd1c613d0792
-function hill_climb(original, canvas, iterations, kernel=kernel, num_gens=n_gens)
+function hill_climb(original, canvas, iterations, kern=kernel, num_gens=n_gens)
 	best_score  = Inf
 	best_canvas = copy(canvas)
 	s_canvas    = copy(canvas)
 	fitness_progress = []
 	for run in 1:iterations
 		#s_canvas = xor.(s_canvas, mutate(canvas, size(kernel)[1]))
-		s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kernel)[1]))]
+		s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kern)[1]))]
 		saved_canvas = copy(s_canvas)
-		convGOL_all!(s_canvas, kernel, num_gens) #s_canvas will be modified
+		convGOL_all!(s_canvas, kern, num_gens) #s_canvas will be modified
 		#rmse_vals = rmse.(original, s_canvas)
 		rmse_vals = img_diff.(original, s_canvas)
 		curr_min  = minimum(rmse_vals)
