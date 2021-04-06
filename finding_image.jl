@@ -18,7 +18,11 @@ begin
 	using LoopVectorization, OffsetArrays
 	using CUDA
 	using Plots
+	using BSON
 end
+
+# ╔═╡ 681b4492-61d0-4b13-8145-84e03351441e
+Threads.nthreads()
 
 # ╔═╡ d12c1e0d-6663-4372-ae5a-9a7e709ee518
 begin
@@ -238,8 +242,12 @@ plot(fitnesses2)
 # ╔═╡ 09371cc5-fc42-4a26-a882-a6256c6fcb1d
 Gray.(GOLsteps(result2[1], kernel, n_generations))
 
+# ╔═╡ 90ae28c8-0cfe-46a0-b662-ec3a62cec3d0
+bson("results_2k.bson", results2)
+
 # ╔═╡ Cell order:
 # ╠═0b6609a2-968c-11eb-3684-ad836c52007b
+# ╠═681b4492-61d0-4b13-8145-84e03351441e
 # ╠═d12c1e0d-6663-4372-ae5a-9a7e709ee518
 # ╠═0916b0a7-fe88-4d23-94c6-0132dedee62f
 # ╠═95de85db-1bf3-43e5-978f-97c736853ef7
@@ -269,3 +277,4 @@ Gray.(GOLsteps(result2[1], kernel, n_generations))
 # ╠═09abcf0e-8a1e-49ba-8725-e6ead7ae0abf
 # ╠═7fc48ec0-cbdc-485d-afd9-c36c46142a6f
 # ╠═09371cc5-fc42-4a26-a882-a6256c6fcb1d
+# ╠═90ae28c8-0cfe-46a0-b662-ec3a62cec3d0
