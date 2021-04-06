@@ -6,6 +6,8 @@ using InteractiveUtils
 
 # ╔═╡ a3e50b96-81f2-11eb-294d-153882ea5f67
 begin
+	using Base.Threads
+	using BenchmarkTools
 	using LinearAlgebra
 	using BenchmarkTools
 	using Images
@@ -76,6 +78,7 @@ end
 
 # ╔═╡ 88fbe00c-90ea-11eb-0e6c-eb8bd504babf
 function convGOL_conv(A::AbstractMatrix, kern::AbstractMatrix)
+	
 	counts = conv(A, kern)[2:end-1, 2:end-1]
 	out    = zeros(eltype(A), size(A))
 	#size(counts) should == size(A)
@@ -84,7 +87,10 @@ function convGOL_conv(A::AbstractMatrix, kern::AbstractMatrix)
 	end
 	out
 end
-
+		
+	
+	
+	
 
 # ╔═╡ 0dd66708-931d-11eb-1068-374a4b5d6512
 function convGOL_dot(A::AbstractMatrix, kern::AbstractMatrix)
@@ -133,6 +139,17 @@ function convGOL_all!(A::Array{Array{UInt8,2},1}, kern::AbstractMatrix, ngens::I
 	     A[img_num] = tmp
 	 end
 end
+
+# ╔═╡ 4e242bfd-02bd-4199-b60a-f45c9bd77402
+
+function convGOL_allt(images::Array{Array{UInt8,2},1}, kern::AbstractMatrix, ngens::Integer)
+          num_imgs = size(images)[1]
+          out = similar(images)
+          Threads.@threads for img_num in 1:num_imgs
+             out[img_num] = GOLsteps(images[img_num], kern, ngens)
+          end
+          out
+       end
 
 # ╔═╡ f8a49e28-8830-11eb-1bc1-61485a281e82
 function convGPU(AA::AbstractMatrix, k::AbstractMatrix)
@@ -309,15 +326,15 @@ Gray.(canvas_loaf_before[1])
 
 # ╔═╡ 0f31b2a0-8d1f-11eb-2113-510bc2e43e46
 begin
-	canvas_loaf_copy = copy(canvas_loaf)
-   convGOL_all!(canvas_loaf_copy, kernel, 5)
+
+   canvas_loaf_out = convGOL_allt(canvas_loaf, kernel, 5)
 end
 
 # ╔═╡ 6f5ae3b4-8d23-11eb-1e2d-891a32cfe9e8
-sum.(canvas_loaf)
+sum.(canvas_loaf_out)
 
 # ╔═╡ c821cad2-8d21-11eb-0576-618733457991
-rmse(canvas_loaf_before[1], canvas_loaf[1]) #WNY is this 0.0?!!
+rmse(canvas_loaf[1], canvas_loaf_out[1]) #WNY is this 0.0?!!
 
 # ╔═╡ e516ec20-8d22-11eb-3e85-d5fa4d9a062f
 Gray.(canvas_loaf[1])
@@ -421,15 +438,17 @@ function hill_climb(original, canvas, iterations, kern=kernel, num_gens=n_gens)
 	for run in 1:iterations
 		#s_canvas = xor.(s_canvas, mutate(canvas, size(kernel)[1]))
 		s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kern)[1]))]
-		saved_canvas = copy(s_canvas)
-		convGOL_all!(s_canvas, kern, num_gens) #s_canvas will be modified
+		#saved_canvas = copy(s_canvas)
+		#convGOL_all!(s_canvas, kern, num_gens) #s_canvas will be modified
+        after_canvas = convGOL_allt(s_canvas, kern, num_gens)
+
 		#rmse_vals = rmse.(original, s_canvas)
-		rmse_vals = img_diff.(original, s_canvas)
+		rmse_vals = img_diff.(original, after_canvas)
 		curr_min  = minimum(rmse_vals)
 		push!(fitness_progress, curr_min) 
 		if curr_min < best_score
 			best_score = curr_min
-			best_canvas = tileimg(saved_canvas[argmin(rmse_vals)], size(saved_canvas)[1])
+			best_canvas = tileimg(s_canvas[argmin(rmse_vals)], size(s_canvas)[1])
 		end
 		s_canvas = best_canvas
 	end
@@ -536,6 +555,7 @@ Gray.(GOLsteps(result5[1], kernel, n_gens))
 # ╠═5f8dc6ee-9319-11eb-1dba-ad3d883b7ed6
 # ╠═6ecf7bf0-9319-11eb-35ee-534981434671
 # ╠═342aa2b0-8d1f-11eb-315d-411b639bd426
+# ╠═4e242bfd-02bd-4199-b60a-f45c9bd77402
 # ╠═f8a49e28-8830-11eb-1bc1-61485a281e82
 # ╠═3a9216ee-8c23-11eb-02c5-1ba46ec12124
 # ╠═20520da4-8dbb-11eb-3712-850c67408a26
