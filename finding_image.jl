@@ -21,6 +21,11 @@ begin
 	using BSON
 end
 
+# ╔═╡ 90ae28c8-0cfe-46a0-b662-ec3a62cec3d0
+using JLD2
+	
+	
+
 # ╔═╡ 681b4492-61d0-4b13-8145-84e03351441e
 Threads.nthreads()
 
@@ -170,6 +175,20 @@ function mutate(imgs, kw=0, max_mutations = MAX_MUTATIONS)
 end
 
 
+# ╔═╡ d336a1e4-592a-427f-b02e-d67b82374710
+function mutate!(imgs, kw=0, max_mutations = MAX_MUTATIONS)
+	num_imgs = size(imgs)[1]
+	img_size = size(imgs[1])
+	for r in 1:num_imgs
+		num_mutations = rand(1:max_mutations)
+	    for i in 1:num_mutations #try 3 random pixels (TODO make this paramatizable)
+	       x,y = rand(1:img_size[1]-kw), rand(1:img_size[2]-kw)
+         imgs[r][x,y] ⊻= 0x01 #flip random bits in image
+      end
+  end
+end
+
+
 # ╔═╡ f6b0dfbe-689f-428c-92c0-fbf421deaa8b
 #possibly an alternative to rmse for loss
 function img_diff(a::AbstractMatrix, b::AbstractMatrix)
@@ -184,10 +203,9 @@ function hill_climb(original, canvas, iterations, kern=kernel, num_gens=n_genera
 	s_canvas    = copy(canvas)
 	fitness_progress = []
 	for run in 1:iterations
-		#s_canvas = xor.(s_canvas, mutate(canvas, size(kernel)[1]))
-		s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kern)[1]))]
-		#saved_canvas = copy(s_canvas)
-		#convGOL_all!(s_canvas, kern, num_gens) #s_canvas will be modified
+		#s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kern)[1]))]
+		
+        mutate!(s_canvas, size(kern)[1])        
         after_canvas = convolveimgs_t(s_canvas, kern, num_gens)
 
 		#rmse_vals = rmse.(original, s_canvas)
@@ -216,7 +234,7 @@ plot(fitnesses)
 Gray.(result[1])
 
 # ╔═╡ 1845b690-0202-4d71-8958-e5771c1d52ec
-result1, fitnesses1 = hill_climb(lisa_loaf, canvas_loaf, 200)
+result1, fitnesses1 = hill_climb(lisa_loaf, result, 2)
 
 
 # ╔═╡ 3fb3b9bb-d34d-4aa3-b2ed-5a135b8ea9a6
@@ -233,7 +251,7 @@ with_terminal() do
 end
 
 # ╔═╡ 09abcf0e-8a1e-49ba-8725-e6ead7ae0abf
-result2, fitnesses2 = hill_climb(lisa_loaf, canvas_loaf, 2000)
+result2, fitnesses2 = hill_climb(lisa_loaf, result1, 20)
 
 
 # ╔═╡ 7fc48ec0-cbdc-485d-afd9-c36c46142a6f
@@ -242,8 +260,21 @@ plot(fitnesses2)
 # ╔═╡ 09371cc5-fc42-4a26-a882-a6256c6fcb1d
 Gray.(GOLsteps(result2[1], kernel, n_generations))
 
-# ╔═╡ 90ae28c8-0cfe-46a0-b662-ec3a62cec3d0
-bson("results_2k.bson", results2)
+# ╔═╡ e48a7983-cd38-4ed4-b0e0-96f3472b5eab
+@save "results_2k.jld2" result2
+
+# ╔═╡ 6a57cc5f-b99d-4030-a897-bf78fc54653a
+result3, fitnesses3 = hill_climb(lisa_loaf, result2, 12000)
+
+
+# ╔═╡ edc6ec74-ef7d-4fcc-bdba-17c729ec22f3
+plot(fitnesses3)
+
+# ╔═╡ 9494a6c3-e52f-4534-b6b3-0ba6a6fdf98a
+Gray.(GOLsteps(result3[1], kernel, n_generations))
+
+# ╔═╡ 0ccf4029-bb48-4c86-9631-42b2f70740f3
+@save "results_12k.jld2" result3
 
 # ╔═╡ Cell order:
 # ╠═0b6609a2-968c-11eb-3684-ad836c52007b
@@ -265,6 +296,7 @@ bson("results_2k.bson", results2)
 # ╠═ba8f43e1-67cc-4726-90d6-1383835d9aaa
 # ╠═70f6e12c-51f8-454b-9b0a-97dc16dc368f
 # ╠═fe58dc89-fbee-4e74-97e8-bb2cd1b6d97b
+# ╠═d336a1e4-592a-427f-b02e-d67b82374710
 # ╠═f6b0dfbe-689f-428c-92c0-fbf421deaa8b
 # ╠═36f8fdea-ea63-4ab0-820a-072049e1fe82
 # ╠═7ba5024f-1d53-4571-90e3-fe73bb5c110a
@@ -278,3 +310,8 @@ bson("results_2k.bson", results2)
 # ╠═7fc48ec0-cbdc-485d-afd9-c36c46142a6f
 # ╠═09371cc5-fc42-4a26-a882-a6256c6fcb1d
 # ╠═90ae28c8-0cfe-46a0-b662-ec3a62cec3d0
+# ╠═e48a7983-cd38-4ed4-b0e0-96f3472b5eab
+# ╠═6a57cc5f-b99d-4030-a897-bf78fc54653a
+# ╠═edc6ec74-ef7d-4fcc-bdba-17c729ec22f3
+# ╠═9494a6c3-e52f-4534-b6b3-0ba6a6fdf98a
+# ╠═0ccf4029-bb48-4c86-9631-42b2f70740f3
