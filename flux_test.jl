@@ -18,8 +18,8 @@ kernel =       UInt8.([ 1 1 1   #kernel for GoL
 
 kernel = reshape(kernel, 3,3,1, :)
 
-liveordie(count, current) = 
-(current == 0 && count==3) || (current == 1 && (1 < count <=3))
+ #liveordie(count, current) = 
+ #(current == 0 && count==3) || (current == 1 && (1 < count <=3))
 
 function mutate!(imgs, kw=0, max_mutations = MAX_MUTATIONS)
 	num_imgs = size(imgs)[1]
@@ -37,6 +37,7 @@ cmodl = Chain(
       Conv((3,3), 1=>1, pad=(1,1))
       #eventually make the liveordie layer here
       )
+@show Chain
 
  #Now we have to set up our weights kernel for GOL:
 Flux.params(cmodl)[1][1,1] = 1.0
@@ -85,7 +86,11 @@ width,height = size(lisa_img)
 liveordie(count::UInt8, current::UInt8) = 
 (current == 0x00 && count==0x03) || (current == 0x01 && (0x01 < count <=0x03))
 
-function convGOL_flux(A::AbstractArray, kern::AbstractArray)
+@show kernel
+
+function convGOL_flux(A::Array{UInt8,4}, kern::Array{UInt8,4})
+ #@show eltype(A)
+ #@show eltype(kern)
 	counts = Flux.conv(A, kern; pad=1)
 	out    = zeros(eltype(A), size(A))
 	#size(counts) should == size(A)
@@ -94,6 +99,8 @@ function convGOL_flux(A::AbstractArray, kern::AbstractArray)
 	end
 	out
 end
+
+
 
 outconv = Flux.conv(canvas_loaf, kernel, pad=1)
 
@@ -121,7 +128,7 @@ end
 
 convGOL = convGOL_flux
 
-function GOLsteps(state, kern, ngens::Integer)
+function GOLsteps(state::Array{UInt8,4}, kern::Array{UInt8,4}, ngens::Integer)
 	for _ in 1:ngens
 		state = convGOL(state, kern)
 	end
@@ -129,7 +136,7 @@ function GOLsteps(state, kern, ngens::Integer)
 end
 
 
-GOLsteps(canvas_loaf, kernel, n_generations )
+ #GOLsteps(canvas_loaf, kernel, n_generations )
 
 function convolveimgs(images, kern::AbstractMatrix, ngens::Integer)
           num_imgs = size(images)[1]
@@ -199,6 +206,10 @@ function mutate(imgs::AbstractArray, kw=0, max_mutations = MAX_MUTATIONS)
 end
 
 #possibly an alternative to rmse for loss
+function img_diff(a::Array{UInt8,4}, b::Array{UInt8,4})
+	sum(xor.(a,b))
+end
+
 function img_diff(a::AbstractArray, b::AbstractArray)
 	sum(xor.(a,b))
 end
@@ -213,6 +224,12 @@ function imgs_diff(a, b)
    errors
 end
 
+ #possible alternative:
+ #rmse_vals=[];for (a,b) in zip(eachslice(canvas_loaf; dims=4), eachslice(lisa_loaf; dims=4))
+ #         @show (typeof(a), typeof(b))
+ #         push!(rmse_vals,img_diff(a,b))
+ #         end
+
 function hill_climb(original, canvas, iterations, kern=kernel, num_gens=n_generations)
 	best_score  = Inf
 	best_canvas = copy(canvas)
@@ -221,18 +238,18 @@ function hill_climb(original, canvas, iterations, kern=kernel, num_gens=n_genera
 	for run in 1:iterations
     s_canvas = [xor.(a,b) for (a,b) in zip(s_canvas, mutate(canvas, size(kern)[1]))]
     after_canvas = GOLsteps(s_canvas, kern, num_gens)
-		#rmse_vals = rmse.(original, s_canvas)
-		rmse_vals = imgs_diff(original, after_canvas)
+    rmse_vals = map(img_diff,  eachslice(original; dims=4), eachslice(s_canvas; dims=4))
 		curr_min  = minimum(rmse_vals)
 		push!(fitness_progress, curr_min) 
 		if curr_min < best_score
 			best_score = curr_min
       best_canvas = repeat(s_canvas[:,:,1,argmin(rmse_vals)],1,1,1,size(s_canvas)[end])
-      #TODO: best_canvas = reshape(best_canvas, 720, 483, 1, :)
 		end
 		s_canvas = best_canvas
 	end
 	return s_canvas, fitness_progress
 end
+
+result, fitnesses = hill_climb(lisa_loaf, canvas_loaf, 10, kernel)
 
 
